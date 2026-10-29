@@ -1,0 +1,30 @@
+
+# Python environment
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Jupyter notebooks' temporary files
+.ipynb_checkpoints/
+
+# MRI data and large files
+data/
+*.npy
+*.npz
+
+# Model checkpoints
+models/
+*.pt
+*.pth
+*.ckpt
+
+# Secrets and local environment variables
+.env
+.env.*
+!.env.example
+
+# Editor and operating system files
+.vscode/
+.DS_Store
+Thumbs.db
