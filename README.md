@@ -38,7 +38,9 @@ To detect abnormalities in knee using MRI scans<br>
 
 <b>Project updates</b>
 
-<p>1. created folders for data, models, and src. Project environment for modules. '.gitignore' for ignoring unnecessary files. requirements.txt for managing dependencies. main.py file for the entry point.</p>
+<p>1. Created folders for data, models, and src. Project environment for modules. '.gitignore' for ignoring unnecessary files. requirements.txt for managing dependencies. main.py file for the entry point.</p>
 
-<p>2. accessing stanford university datasets of knee mri abnormalities and loading them into the project from redvivis.</p>
+<p>2. Accessing stanford university datasets of knee mri abnormalities and loading them into the project from redivis.</p>
+
+<p>3. Created a script to inspect MRNet training and validation label tables.</p>
 
