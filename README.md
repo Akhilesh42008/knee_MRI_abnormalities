@@ -44,3 +44,6 @@ To detect abnormalities in knee using MRI scans<br>
 
 <p>3. Created a script to inspect MRNet training and validation label tables.</p>
 
+<p>4. Standardize label-table columns to 'exam_id' and 'label'.</p>
+
+<p>5. Check missing values and duplicate exam IDs.</p>
