@@ -1,7 +1,7 @@
 # Team:-
 # Akhilesh Bethireddy (SC25B141)
 # Gireesh Bhavani Molkalapalli (SC25B145)
-# lokesh Jallu (SC25B151)
+# lokesh Jallu (SC25B150)
 
 # knee_MRI_abnormalities
 To detect abnormalities in knee using MRI scans<br>
