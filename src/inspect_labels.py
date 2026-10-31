@@ -6,19 +6,20 @@ import redivis
 def main():
     # Connect to the MRNet dataset
     organization = redivis.organization("AIMI")
+   
     dataset = organization.dataset("mrnet_knee_mri_s:4a2c")
 
     # Label tables for both training and validation
     splits = {
         "train": {
-            "abnormality": "train_abnormal",
-            "ACL tear": "train_acl",
-            "meniscus tear": "train_meniscus",
+            "abnormality": "train_abnormal:4v5w",
+            "ACL tear": "train_acl:v9mj",
+            "meniscus tear": "train_meniscus:3x4c",
         },
         "valid": {
-            "abnormality": "valid_abnormal",
-            "ACL tear": "valid_acl",
-            "meniscus tear": "valid_meniscus",
+            "abnormality": "valid_abnormal:851r",
+            "ACL tear": "valid_acl:sqwh",
+            "meniscus tear": "valid_meniscus:nqng",
         },
     }
 
