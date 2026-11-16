@@ -18,7 +18,7 @@ We are building models for three tasks:
 
 We connected to the MRNet dataset through Redivis and created scripts to collect and inspect the training and validation labels. The labels for all three tasks are combined using the examination ID.
 
-We have also added the first version of the image loader, ResNet18 model, training script and evaluation script. The model code passed a small test using sample data. Training on the real MRI scans is still to be done.
+We have also added the first version of the image loader, ResNet18 model, training script and evaluation script. The model code passed a small test using sample data. The MRI files and label tables have been downloaded. We have added scripts to summarize the dataset, train the three classifiers, evaluate them and make predictions for an individual examination. Full model training and evaluation are being left until the rest of the project code is ready.
 
 ## Folder structure
 
@@ -40,6 +40,8 @@ The project files are arranged like this:
   - `train.py`
   - `evaluate.py`
   - `smoke_test.py`
+  - `prepare_data.py`
+  - `predict.py`
 - `main.py`
 - `requirements.txt`
 - `README.md`
@@ -68,13 +70,15 @@ Run `python -m src.download_mri` to download both splits.
 
 The files are saved in `data/MRNet-v1.0/`. The download can take some time, so make sure you have enough free disk space.
 
+## Preparing the data
+
+Before training, the data summary script checks which labelled examinations have all three MRI planes, reports the class counts and saves the results in `reports/data_summary.json`. Run `python -m src.prepare_data`.
+
 ## Training
 
-Once the MRI files and label CSVs are ready, run `python -m src.train --data-root data/MRNet-v1.0 --epochs 10 --batch-size 2`.
+The training script builds a separate classifier for abnormality, ACL tear and meniscus tear. It uses class-weighted loss, a learning-rate scheduler and early stopping. On a CUDA GPU it also enables mixed-precision training. The best checkpoints and epoch histories are saved in `models/`.
 
-The script trains a separate model for each task. The best checkpoints and training history are saved in the `models/` folder.
-
-To use ImageNet-pretrained ResNet18 weights, add `--pretrained` to the command.
+When we are ready to train, run `python -m src.train --data-root data/MRNet-v1.0 --epochs 10 --batch-size 2 --pretrained`. The batch size and number of slices can be reduced if GPU memory is limited.
 
 ## Evaluation
 
@@ -88,7 +92,11 @@ We added a small test that creates temporary sample MRI arrays and checks whethe
 
 This test passed with sample data. It only checks that the code runs; it does not mean the models have been trained on the actual MRI scans.
 
+## Making a prediction
+
+After the three model checkpoints have been trained, a prediction for one examination can be generated with `python -m src.predict --exam-id 0000 --split valid`. The script prints the predicted label and probability for each task.
+
 ## Current status
 
-The label extraction and initial model code are ready. We still need to finish downloading the MRI files, train all three models, check their validation results and make improvements if needed.
+The label extraction and MRI downloads are complete. The data preparation, model, training, evaluation and single-examination prediction code is in place. The remaining major work is to train the models, review their validation results and improve them where needed.
 
