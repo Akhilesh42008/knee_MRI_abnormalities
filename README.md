@@ -103,6 +103,16 @@ Before training, make sure both split label files exist:
 
 The loader skips examinations that do not have all three plane files and all three task labels. It raises an error if it cannot find any complete examinations.
 
+## Quick pipeline check
+
+Before using the real MRI files, run a tiny synthetic check. It creates temporary example volumes, checks that the loader returns the expected tensor shape, and sends one example through the model:
+
+```bash
+python -m src.smoke_test
+```
+
+This checks the code path and installed dependencies; it does not train a model or measure accuracy.
+
 ## Train the models
 
 From the repository root:
