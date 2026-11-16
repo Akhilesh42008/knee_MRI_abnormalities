@@ -18,7 +18,7 @@ We are building models for three tasks:
 
 We connected to the MRNet dataset through Redivis and created scripts to collect and inspect the training and validation labels. The labels for all three tasks are combined using the examination ID.
 
-We have also added the first version of the image loader, ResNet18 model, training script and evaluation script. The model code passed a small test using sample data. The MRI files and label tables have been downloaded. We have added scripts to summarize the dataset, train the three classifiers, evaluate them and make predictions for an individual examination. Full model training and evaluation are being left until the rest of the project code is ready.
+We have added the image loader, ResNet18 model, training and evaluation scripts, dataset summary, prediction script and training-history plots. The model code passed a small test using sample data. The MRI files and label tables have been downloaded. Full model training and evaluation are still pending.
 
 ## Folder structure
 
@@ -42,6 +42,7 @@ The project files are arranged like this:
   - `smoke_test.py`
   - `prepare_data.py`
   - `predict.py`
+  - `plot_history.py`
 - `main.py`
 - `requirements.txt`
 - `README.md`
@@ -76,7 +77,7 @@ Before training, the data summary script checks which labelled examinations have
 
 ## Training
 
-The training script builds a separate classifier for abnormality, ACL tear and meniscus tear. It uses class-weighted loss, a learning-rate scheduler and early stopping. On a CUDA GPU it also enables mixed-precision training. The best checkpoints and epoch histories are saved in `models/`.
+The training script builds a separate classifier for abnormality, ACL tear and meniscus tear. It uses class-weighted loss, a learning-rate scheduler, early stopping and random slice sampling. On a CUDA GPU it also enables mixed-precision training. The best checkpoints and epoch histories are saved in `models/`.
 
 When we are ready to train, run `python -m src.train --data-root data/MRNet-v1.0 --epochs 10 --batch-size 2 --pretrained`. The batch size and number of slices can be reduced if GPU memory is limited.
 
@@ -92,11 +93,15 @@ We added a small test that creates temporary sample MRI arrays and checks whethe
 
 This test passed with sample data. It only checks that the code runs; it does not mean the models have been trained on the actual MRI scans.
 
+## Training plots
+
+After training, run `python -m src.plot_history` to save loss and ROC-AUC history plots in `reports/`.
+
 ## Making a prediction
 
 After the three model checkpoints have been trained, a prediction for one examination can be generated with `python -m src.predict --exam-id 0000 --split valid`. The script prints the predicted label and probability for each task.
 
 ## Current status
 
-The label extraction and MRI downloads are complete. The data preparation, model, training, evaluation and single-examination prediction code is in place. The remaining major work is to train the models, review their validation results and improve them where needed.
+The label extraction and MRI downloads are complete. The data preparation, model, training, evaluation, prediction and training-plot scripts are in place. The next stage is to train the models, review their validation results and improve them where needed.
 
