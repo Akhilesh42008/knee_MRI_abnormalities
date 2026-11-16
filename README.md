@@ -22,31 +22,27 @@ We have also added the first version of the image loader, ResNet18 model, traini
 
 ## Folder structure
 
-```
-knee_MRI_abnormalities/
-|
-|-- data/
-|   |-- labels/
-|   |-- MRNet-v1.0/
-|
-|-- models/
-|-- reports/
-|-- src/
-|   |-- check_redivis.py
-|   |-- inspect_labels.py
-|   |-- inspect_mri_table.py
-|   |-- list_tables.py
-|   |-- download_mri.py
-|   |-- dataset.py
-|   |-- model.py
-|   |-- train.py
-|   |-- evaluate.py
-|   |-- smoke_test.py
-|
-|-- main.py
-|-- requirements.txt
-|-- README.md
-```
+The project files are arranged like this:
+
+- `data/`
+  - `labels/`
+  - `MRNet-v1.0/`
+- `models/`
+- `reports/`
+- `src/`
+  - `check_redivis.py`
+  - `inspect_labels.py`
+  - `inspect_mri_table.py`
+  - `list_tables.py`
+  - `download_mri.py`
+  - `dataset.py`
+  - `model.py`
+  - `train.py`
+  - `evaluate.py`
+  - `smoke_test.py`
+- `main.py`
+- `requirements.txt`
+- `README.md`
 
 The dataset, model checkpoints and reports stay on the local machine and are not uploaded to GitHub.
 
