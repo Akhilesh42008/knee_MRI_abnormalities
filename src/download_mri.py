@@ -23,8 +23,8 @@ def download_split(dataset, split, table_ref, output_root, max_files=None):
     print(f"Redivis table: {table_ref}")
     print(f"Destination: {destination.resolve()}")
 
-    directory = table.to_directory(max_results=max_files)
-    directory.download(str(destination), max_results=max_files, progress=True)
+    directory = table.to_directory()
+    directory.download(str(destination), max_results=max_files, progress=True, overwrite=True)
     print(f"{split} download finished.")
 
 
