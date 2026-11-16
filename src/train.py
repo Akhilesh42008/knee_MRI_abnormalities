@@ -21,17 +21,19 @@ def seed_everything(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-def train_epoch(model, loader, optimizer, criterion, device, task_index):
+def train_epoch(model, loader, optimizer, criterion, device, task_index, scaler):
     model.train()
     total_loss = 0.0
     for batch in loader:
         images = batch["image"].to(device, non_blocking=True)
         labels = batch["labels"][:, task_index].to(device)
         optimizer.zero_grad(set_to_none=True)
-        logits = model(images)
-        loss = criterion(logits, labels)
-        loss.backward()
-        optimizer.step()
+        with torch.autocast(device_type=device.type, enabled=device.type == "cuda"):
+            logits = model(images)
+            loss = criterion(logits, labels)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
         total_loss += loss.item() * labels.size(0)
     return total_loss / len(loader.dataset)
 
@@ -43,18 +45,20 @@ def validate(model, loader, criterion, device, task_index):
     for batch in loader:
         images = batch["image"].to(device, non_blocking=True)
         labels = batch["labels"][:, task_index].to(device)
-        logits = model(images)
-        losses += criterion(logits, labels).item() * labels.size(0)
+        with torch.autocast(device_type=device.type, enabled=device.type == "cuda"):
+            logits = model(images)
+            loss = criterion(logits, labels)
+        losses += loss.item() * labels.size(0)
         targets.extend(labels.cpu().numpy().tolist())
         probabilities.extend(torch.sigmoid(logits).cpu().numpy().tolist())
     predictions = (np.asarray(probabilities) >= 0.5).astype(int)
     metrics = {
         "loss": losses / len(loader.dataset),
-        "accuracy": accuracy_score(targets, predictions),
-        "f1": f1_score(targets, predictions, zero_division=0),
+        "accuracy": float(accuracy_score(targets, predictions)),
+        "f1": float(f1_score(targets, predictions, zero_division=0)),
     }
     try:
-        metrics["roc_auc"] = roc_auc_score(targets, probabilities)
+        metrics["roc_auc"] = float(roc_auc_score(targets, probabilities))
     except ValueError:
         metrics["roc_auc"] = None
     return metrics
@@ -72,9 +76,13 @@ def main():
     parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--workers", type=int, default=0)
+    parser.add_argument("--patience", type=int, default=3)
     parser.add_argument("--pretrained", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
+
+    if args.epochs < 1 or args.batch_size < 1 or args.num_slices < 1:
+        parser.error("epochs, batch-size and num-slices must be positive integers")
 
     seed_everything(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -84,8 +92,14 @@ def main():
 
     train_set = MRNetDataset(args.data_root, "train", args.train_labels, args.image_size, args.num_slices, True)
     valid_set = MRNetDataset(args.data_root, "valid", args.valid_labels, args.image_size, args.num_slices, False)
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=device.type == "cuda")
-    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers, pin_memory=device.type == "cuda")
+    train_loader = DataLoader(
+        train_set, batch_size=args.batch_size, shuffle=True,
+        num_workers=args.workers, pin_memory=device.type == "cuda",
+    )
+    valid_loader = DataLoader(
+        valid_set, batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=device.type == "cuda",
+    )
     print(f"Training examinations: {len(train_set)} | Validation examinations: {len(valid_set)}")
 
     for task_index, task in enumerate(TASKS):
@@ -98,26 +112,54 @@ def main():
             pos_weight=torch.tensor([negatives / positives], dtype=torch.float32, device=device)
         )
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=1,
+        )
+        scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
         best_auc = -1.0
+        best_loss = float("inf")
+        epochs_without_improvement = 0
         history = []
 
         for epoch in range(1, args.epochs + 1):
-            train_loss = train_epoch(model, train_loader, optimizer, criterion, device, task_index)
+            train_loss = train_epoch(model, train_loader, optimizer, criterion, device, task_index, scaler)
             metrics = validate(model, valid_loader, criterion, device, task_index)
-            history.append({"epoch": epoch, "train_loss": train_loss, **metrics})
+            scheduler.step(metrics["loss"])
+            history.append({
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "learning_rate": optimizer.param_groups[0]["lr"],
+                **metrics,
+            })
             auc = metrics["roc_auc"] if metrics["roc_auc"] is not None else -1.0
             print(
                 f"Epoch {epoch:02d}/{args.epochs} | train_loss={train_loss:.4f} "
                 f"| val_loss={metrics['loss']:.4f} | acc={metrics['accuracy']:.4f} "
-                f"| f1={metrics['f1']:.4f} | auc={metrics['roc_auc']}"
+                f"| f1={metrics['f1']:.4f} | auc={metrics['roc_auc']} "
+                f"| lr={optimizer.param_groups[0]['lr']:.2e}"
             )
-            if auc > best_auc:
-                best_auc = auc
+
+            improved = auc > best_auc if metrics["roc_auc"] is not None else metrics["loss"] < best_loss
+            if improved:
+                best_auc = max(best_auc, auc)
+                best_loss = min(best_loss, metrics["loss"])
+                epochs_without_improvement = 0
                 torch.save(
-                    {"task": task, "model_state_dict": model.state_dict(), "epoch": epoch,
-                     "validation_metrics": metrics, "args": vars(args)},
+                    {
+                        "task": task,
+                        "model_state_dict": model.state_dict(),
+                        "epoch": epoch,
+                        "validation_metrics": metrics,
+                        "args": vars(args),
+                    },
                     output_dir / f"{task}_best.pth",
                 )
+            else:
+                epochs_without_improvement += 1
+
+            if epochs_without_improvement >= args.patience:
+                print(f"Early stopping {task}: validation did not improve for {args.patience} epochs.")
+                break
 
         with open(output_dir / f"{task}_history.json", "w", encoding="utf-8") as file:
             json.dump(history, file, indent=2)
