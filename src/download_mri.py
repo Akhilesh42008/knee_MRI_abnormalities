@@ -23,8 +23,30 @@ def download_split(dataset, split, table_ref, output_root, max_files=None):
     print(f"Redivis table: {table_ref}")
     print(f"Destination: {destination.resolve()}")
 
+    files = table.list_files(max_results=max_files)
+    expected_count = len(files)
+    print(f"Files to download: {expected_count}")
+
     directory = table.to_directory()
-    directory.download(str(destination), max_results=max_files, progress=True, overwrite=True)
+    directory.download(
+        str(destination),
+        max_results=max_files,
+        progress=True,
+        overwrite=True,
+        max_parallelization=2,
+        max_concurrency=4,
+    )
+
+    downloaded_count = sum(1 for path in destination.rglob("*") if path.is_file())
+    print(f"{split}: {downloaded_count}/{expected_count} files present")
+
+    if downloaded_count < expected_count:
+        raise RuntimeError(
+            f"{split} download is incomplete: expected {expected_count} files, "
+            f"but found {downloaded_count}. Run the command again; existing files "
+            "will be overwritten and the count will be checked again."
+        )
+
     print(f"{split} download finished.")
 
 
@@ -49,7 +71,7 @@ def main():
     for split, table_ref in SPLITS.items():
         download_split(dataset, split, table_ref, output_root, args.max_files)
 
-    print("\nBoth MRI splits have been downloaded.")
+    print("\nBoth MRI splits have been downloaded completely.")
     print(f"Dataset location: {output_root.resolve()}")
     print("Keep the downloaded plane folders and examination filenames unchanged.")
 
