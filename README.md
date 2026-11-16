@@ -46,30 +46,9 @@ The project files are arranged like this:
 
 The dataset, model checkpoints and reports stay on the local machine and are not uploaded to GitHub.
 
-## Setup
-
-We are using Python 3.10/3.11. Create and activate a virtual environment:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-Install the packages:
-
-```powershell
-pip install -r requirements.txt
-```
-
-For GPU training, install a PyTorch version that matches the CUDA setup on your computer.
-
 ## Getting the labels
 
-The label tables are available through Redivis. After setting up Redivis access, run:
-
-```powershell
-python -m src.inspect_labels
-```
+The label tables are available through Redivis. After setting up Redivis access, run `python -m src.inspect_labels`.
 
 The script saves the individual label files and the combined files in `data/labels/`:
 
@@ -85,21 +64,13 @@ The MRI file tables are available through Redivis:
 - Training table: `train:5wjf`
 - Validation table: `valid:zcmk`
 
-Run this command to download both splits:
-
-```powershell
-python -m src.download_mri
-```
+Run `python -m src.download_mri` to download both splits.
 
 The files are saved in `data/MRNet-v1.0/`. The download can take some time, so make sure you have enough free disk space.
 
 ## Training
 
-Once the MRI files and label CSVs are ready, run:
-
-```powershell
-python -m src.train --data-root data/MRNet-v1.0 --epochs 10 --batch-size 2
-```
+Once the MRI files and label CSVs are ready, run `python -m src.train --data-root data/MRNet-v1.0 --epochs 10 --batch-size 2`.
 
 The script trains a separate model for each task. The best checkpoints and training history are saved in the `models/` folder.
 
@@ -107,21 +78,13 @@ To use ImageNet-pretrained ResNet18 weights, add `--pretrained` to the command.
 
 ## Evaluation
 
-After training, run:
-
-```powershell
-python -m src.evaluate --data-root data/MRNet-v1.0
-```
+After training, run `python -m src.evaluate --data-root data/MRNet-v1.0`.
 
 The metrics, ROC curves and confusion matrices are saved in the `reports/` folder.
 
 ## Testing the code
 
-We added a small test that creates temporary sample MRI arrays and checks whether the data loader and model work:
-
-```powershell
-python -m src.smoke_test
-```
+We added a small test that creates temporary sample MRI arrays and checks whether the data loader and model work. Run `python -m src.smoke_test`.
 
 This test passed with sample data. It only checks that the code runs; it does not mean the models have been trained on the actual MRI scans.
 
