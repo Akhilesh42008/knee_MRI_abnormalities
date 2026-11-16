@@ -17,48 +17,68 @@ from src.dataset import MRNetDataset, TASKS
 from src.model import MRNetClassifier
 
 
-@torch.no_grad()
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate saved MRNet task classifiers.")
+    parser = argparse.ArgumentParser(description="Evaluate the three saved MRNet classifiers.")
     parser.add_argument("--data-root", default="data/MRNet-v1.0")
     parser.add_argument("--labels", default="data/labels/valid_labels_all.csv")
     parser.add_argument("--checkpoint-dir", default="models")
     parser.add_argument("--output-dir", default="reports")
     parser.add_argument("--batch-size", type=int, default=2)
-    parser.add_argument("--num-slices", type=int, default=16)
-    parser.add_argument("--image-size", type=int, default=224)
+    parser.add_argument("--workers", type=int, default=0)
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = MRNetDataset(args.data_root, "valid", args.labels, args.image_size, args.num_slices, False)
-    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False)
+    checkpoint_dir = Path(args.checkpoint_dir)
+    checkpoints = {}
+    for task in TASKS:
+        path = checkpoint_dir / f"{task}_best.pth"
+        if not path.is_file():
+            raise FileNotFoundError(f"Missing checkpoint: {path}")
+        checkpoints[task] = torch.load(path, map_location=device, weights_only=False)
+
+    model_args = checkpoints[TASKS[0]].get("args", {})
+    image_size = model_args.get("image_size", 224)
+    num_slices = model_args.get("num_slices", 16)
+    dataset = MRNetDataset(
+        args.data_root, "valid", args.labels,
+        image_size=image_size, num_slices=num_slices, training=False,
+    )
+    loader = DataLoader(
+        dataset, batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=device.type == "cuda",
+    )
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     summary = {}
 
     for task_index, task in enumerate(TASKS):
-        checkpoint_path = Path(args.checkpoint_dir) / f"{task}_best.pth"
-        if not checkpoint_path.is_file():
-            raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}. Train the models first.")
-        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        checkpoint = checkpoints[task]
+        task_args = checkpoint.get("args", {})
+        if task_args.get("image_size", image_size) != image_size or task_args.get("num_slices", num_slices) != num_slices:
+            raise ValueError("The three checkpoints use different input sizes. Evaluate them separately.")
         model = MRNetClassifier(pretrained=False).to(device)
         model.load_state_dict(checkpoint["model_state_dict"])
         model.eval()
         targets, probabilities = [], []
 
         for batch in loader:
-            logits = model(batch["image"].to(device))
+            logits = model(batch["image"].to(device, non_blocking=True))
             targets.extend(batch["labels"][:, task_index].numpy().tolist())
             probabilities.extend(torch.sigmoid(logits).cpu().numpy().tolist())
 
         predictions = (np.asarray(probabilities) >= 0.5).astype(int)
         metrics = {
+            "checkpoint_epoch": checkpoint.get("epoch"),
+            "exam_count": len(targets),
             "accuracy": float(accuracy_score(targets, predictions)),
             "precision": float(precision_score(targets, predictions, zero_division=0)),
             "recall": float(recall_score(targets, predictions, zero_division=0)),
             "f1": float(f1_score(targets, predictions, zero_division=0)),
-            "confusion_matrix": confusion_matrix(targets, predictions).tolist(),
-            "classification_report": classification_report(targets, predictions, zero_division=0, output_dict=True),
+            "confusion_matrix": confusion_matrix(targets, predictions, labels=[0, 1]).tolist(),
+            "classification_report": classification_report(
+                targets, predictions, labels=[0, 1], target_names=["negative", "positive"],
+                zero_division=0, output_dict=True,
+            ),
         }
         try:
             metrics["roc_auc"] = float(roc_auc_score(targets, probabilities))
