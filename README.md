@@ -1,59 +1,141 @@
-# Team Members
+# Knee MRI Classification
 
-- **Akhilesh Bethireddy (SC25B141)**
-- **Gireesh Bhavani Molkalapalli (SC25B145)**
-- **Lokesh Jallu (SC25B150)**
+A small team project where we are learning how to use deep learning to recognise three findings in knee MRI examinations. We are using the Stanford MRNet dataset and PyTorch.
 
-# knee_MRI_abnormalities
+The project has three separate prediction tasks:
 
-**To detect abnormalities in the knee using MRI scans.**
+- **Abnormality:** whether the examination is labelled abnormal.
+- **ACL:** whether an ACL tear is present.
+- **Meniscus:** whether a meniscus tear is present.
 
-<br>
+We are building this as a learning project, so the code is kept in separate files and the results will be reported from actual validation runs. This is an experimental educational model, not a medical diagnostic tool.
 
-<p>This is a team-based machine learning project focused on classifying knee MRI examinations using deep learning techniques and PyTorch, based on the Stanford MRNet Knee MRI dataset.</p>
+## Team
 
-<br>
+- Akhilesh Bethireddy (SC25B141)
+- Gireesh Bhavani Molkalapalli (SC25B145)
+- Lokesh Jallu (SC25B150)
 
-<p>The project aims to develop models for the following three classification tasks:</p>
+## Where the project stands
 
-<p>1. <b>Abnormality Classification</b> — Predict whether a knee MRI examination is labeled as abnormal.</p>
+The label-inspection scripts are in place. We have now added the first end-to-end modelling pipeline: a dataset loader, a shared ResNet18-based model, training for each of the three tasks, and a validation evaluation script.
 
-<p>2. <b>ACL Tear Classification</b> — Predict whether an examination is labeled as having an Anterior Cruciate Ligament (ACL) tear.</p>
+The next thing we need to verify on the machine that has dataset access is the MRI file export and folder layout. The model code expects one NumPy volume per examination and imaging plane. We have not reported model accuracy yet because the pipeline still needs to be run against the actual MRI files.
 
-<p>3. <b>Meniscus Tear Classification</b> — Predict whether an examination is labeled as having a meniscus tear.</p>
+## Project layout
 
-<p>The initial implementation will focus on ACL tear classification. Once the data pipeline and baseline model are developed and tested successfully, the project will be extended to the other two classification tasks.</p>
+```text
+.
+├── data/
+│   └── labels/                 # Generated label CSVs (not committed)
+├── models/                     # Saved model checkpoints (not committed)
+├── reports/                    # Evaluation plots and metrics (not committed)
+├── src/
+│   ├── check_redivis.py
+│   ├── inspect_labels.py
+│   ├── inspect_mri_table.py
+│   ├── dataset.py
+│   ├── model.py
+│   ├── train.py
+│   └── evaluate.py
+├── main.py
+└── requirements.txt
+```
 
-<br>
+## Setup
 
-<b>Project Goals</b>
+Use Python 3.10 or 3.11 in a virtual environment.
 
-<p>1. Explore and understand the MRI files and corresponding label tables.</p>
+```bash
+python -m venv .venv
+```
 
-<p>2. Verify and understand the meaning of the labels provided in the dataset.</p>
+Activate it on Windows:
 
-<p>3. Match MRI examinations with their corresponding labels using examination IDs.</p>
+```powershell
+.venv\Scripts\Activate.ps1
+```
 
-<p>4. Preprocess MRI images using NumPy and PyTorch.</p>
+Install the dependencies:
 
-<p>5. Build a baseline Convolutional Neural Network (CNN) for classification.</p>
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-<p>6. Train and evaluate separate classifiers for abnormality detection, ACL tears, and meniscus tears.</p>
+For a CUDA-enabled PyTorch installation, install the build that matches the CUDA support on your machine using the official PyTorch installation selector.
 
-<p>7. Evaluate the models using held-out examinations and document their performance and limitations.</p>
+## Dataset preparation
 
-<p>8. Maintain a reproducible data-processing pipeline while respecting dataset access and usage conditions.</p>
+The label inspection script uses the Redivis dataset references already recorded in the source code. Run it in an environment where your Redivis access is configured:
 
-<br>
+```bash
+python -m src.inspect_labels
+```
 
-<b>Project Updates</b>
+It writes the individual task tables and merged label files into `data/labels/`. The training code reads the merged files and expects these columns:
 
-<p>1. Created the initial project structure with separate folders for data, models, and source code (src). Set up the Python project environment, created a .gitignore file to exclude unnecessary files, added requirements.txt for dependency management, and created main.py as the project entry point.</p>
+- `exam_id`
+- `abnormal`
+- `acl`
+- `meniscus`
 
-<p>2. Established a connection to the Stanford MRNet Knee MRI dataset through Redivis to access the available dataset tables.</p>
+The MRI volumes are expected to be exported as NumPy arrays with shape `[slices, height, width]`, one file per exam and plane:
 
-<p>3. Created Python scripts to inspect the MRNet training and validation label tables for all three classification tasks.</p>
+```text
+data/MRNet-v1.0/
+├── train/
+│   ├── axial/0000.npy
+│   ├── coronal/0000.npy
+│   └── sagittal/0000.npy
+└── valid/
+    ├── axial/0000.npy
+    ├── coronal/0000.npy
+    └── sagittal/0000.npy
+```
 
-<p>4. Standardized the label-table column names to <code>exam_id</code> and <code>label</code> for consistent data processing.</p>
+Use the actual examination IDs from the label tables as filenames (the `0000.npy` above is only an example). Keep the original dataset files private and follow the dataset's access and usage conditions. The repository intentionally ignores local data and model files.
 
-<p>5. Implemented checks for missing values and duplicate examination IDs to verify the consistency of the label tables.</p>
+Before training, make sure both split label files exist:
+
+- `data/labels/train_labels_all.csv`
+- `data/labels/valid_labels_all.csv`
+
+The loader skips examinations that do not have all three plane files and all three task labels. It raises an error if it cannot find any complete examinations.
+
+## Train the models
+
+From the repository root:
+
+```bash
+python -m src.train --data-root data/MRNet-v1.0 --epochs 10 --batch-size 2
+```
+
+This trains one model per task and saves the best validation checkpoint and a JSON training history in `models/`. To start from ImageNet-pretrained ResNet18 weights, add `--pretrained`. The first run with that option may download weights.
+
+Useful options include `--num-slices`, `--image-size`, `--lr`, and `--workers`. Start with a small batch size if GPU memory is limited.
+
+## Evaluate
+
+After training:
+
+```bash
+python -m src.evaluate --data-root data/MRNet-v1.0
+```
+
+The script writes per-task metrics, ROC curves (when both classes are present), and confusion matrices into `reports/`.
+
+## A note on the current baseline
+
+The first version samples a fixed number of slices from each MRI volume, encodes the slices with ResNet18, pools the slice features, and combines the three imaging planes for a binary prediction. Each task is trained separately with a class-weighted binary loss.
+
+This is a baseline to get the full workflow working. It is not guaranteed to match the original MRNet paper's preprocessing or performance. We will tune it after checking the exported file format, class balance, and validation behaviour. The validation split is used for model selection and should not be described as an independent test set.
+
+## Current limitations / next checks
+
+- Confirm that the Redivis MRI file table can be exported into the NumPy layout described above.
+- Verify the examination IDs and split membership against the actual MRI files.
+- Run a small end-to-end smoke test before a full training job.
+- Review class balance and metrics before making any performance claims.
+- Add an independent test evaluation if an authorised test split is available.
+
