@@ -39,7 +39,16 @@ class MRNetDataset(Dataset):
         self.samples = []
         for _, row in self.labels.iterrows():
             exam_id = str(row["exam_id"])
-            paths = {plane: self.data_root / split / plane / f"{exam_id}.npy" for plane in PLANES}
+            # MRNet filenames commonly use four-digit IDs (for example 0007.npy),
+            # while a CSV reader may represent the same ID as "7".
+            file_ids = [exam_id]
+            if exam_id.isdigit():
+                file_ids.append(exam_id.zfill(4))
+            paths = {}
+            for plane in PLANES:
+                folder = self.data_root / split / plane
+                matches = [folder / f"{file_id}.npy" for file_id in file_ids]
+                paths[plane] = next((path for path in matches if path.is_file()), matches[0])
             if all(path.is_file() for path in paths.values()):
                 self.samples.append((exam_id, paths, row[list(TASKS)].to_numpy(dtype=np.float32)))
 
