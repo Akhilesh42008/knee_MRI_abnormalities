@@ -92,4 +92,3 @@ This test passed with sample data. It only checks that the code runs; it does no
 
 The label extraction and initial model code are ready. We still need to finish downloading the MRI files, train all three models, check their validation results and make improvements if needed.
 
-This project is for learning and experimentation. It is not intended for medical diagnosis.
