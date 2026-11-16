@@ -1,5 +1,6 @@
 import argparse
 import json
+from pathlib import Path
 
 import torch
 
@@ -14,33 +15,41 @@ def main():
     parser.add_argument("--data-root", default="data/MRNet-v1.0")
     parser.add_argument("--labels", default=None)
     parser.add_argument("--checkpoint-dir", default="models")
-    parser.add_argument("--num-slices", type=int, default=16)
-    parser.add_argument("--image-size", type=int, default=224)
     args = parser.parse_args()
 
     labels_path = args.labels or (
         "data/labels/train_labels_all.csv" if args.split == "train"
         else "data/labels/valid_labels_all.csv"
     )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    checkpoint_dir = Path(args.checkpoint_dir)
+    checkpoints = {}
+    for task in TASKS:
+        path = checkpoint_dir / f"{task}_best.pth"
+        if not path.is_file():
+            raise FileNotFoundError(f"Missing checkpoint: {path}. Train the models first.")
+        checkpoints[task] = torch.load(path, map_location=device, weights_only=False)
+
+    model_args = checkpoints[TASKS[0]].get("args", {})
     dataset = MRNetDataset(
         args.data_root, args.split, labels_path,
-        image_size=args.image_size, num_slices=args.num_slices, training=False,
+        image_size=model_args.get("image_size", 224),
+        num_slices=model_args.get("num_slices", 16),
+        training=False,
     )
     wanted_id = str(args.exam_id).zfill(4) if str(args.exam_id).isdigit() else str(args.exam_id)
     sample_index = next(
-        (index for index, sample in enumerate(dataset.samples) if sample[0].zfill(4) == wanted_id),
+        (index for index, sample in enumerate(dataset.samples)
+         if (sample[0].zfill(4) if sample[0].isdigit() else sample[0]) == wanted_id),
         None,
     )
     if sample_index is None:
         raise ValueError(f"Examination {args.exam_id} was not found in the {args.split} dataset.")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     sample = dataset[sample_index]
     results = {}
-
-    for task_index, task in enumerate(TASKS):
-        checkpoint_path = f"{args.checkpoint_dir}/{task}_best.pth"
-        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    for task in TASKS:
+        checkpoint = checkpoints[task]
         model = MRNetClassifier(pretrained=False).to(device)
         model.load_state_dict(checkpoint["model_state_dict"])
         model.eval()
