@@ -9,10 +9,16 @@ DATASET_REF = "mrnet_knee_mri_s:4a2c"
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Download the MRI files from the Redivis file-index table."
+        description="Download MRI volumes from the Redivis file-index table."
     )
-    parser.add_argument("--table", required=True, help="File-index table reference from src.list_tables")
-    parser.add_argument("--output", default="data/MRNet-v1.0", help="Folder for the downloaded MRI files")
+    parser.add_argument("--table", required=True, help="MRI file-index table reference")
+    parser.add_argument("--output", default="data/MRNet-v1.0")
+    parser.add_argument(
+        "--max-files",
+        type=int,
+        default=None,
+        help="Optional limit for a small first download; omit to download every file.",
+    )
     args = parser.parse_args()
 
     output = Path(args.output)
@@ -22,16 +28,19 @@ def main():
     table = dataset.table(args.table)
     table.get()
 
-    print("Selected table:", args.table)
-    print("Downloading MRI files to:", output.resolve())
-    print("This can take a while because the MRI volumes are large.")
+    print(f"Downloading from: {args.table}")
+    print(f"Destination: {output.resolve()}")
+    if args.max_files:
+        print(f"File limit: {args.max_files}")
+    else:
+        print("Download limit: none")
 
-    directory = table.to_directory()
-    directory.download(str(output))
+    directory = table.to_directory(max_results=args.max_files)
+    directory.download(str(output), max_results=args.max_files, progress=True)
 
     print("\nDownload finished.")
-    print("Files were saved under:", output.resolve())
-    print("Keep the original folder structure; the training loader expects split/plane/exam_id.npy.")
+    print(f"Files are in: {output.resolve()}")
+    print("The files should retain their folders and examination filenames.")
 
 
 if __name__ == "__main__":
