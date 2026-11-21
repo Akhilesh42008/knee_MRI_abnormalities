@@ -10,6 +10,9 @@ __pycache__/
 
 # MRI data and large files
 data/
+kaggle_mri_data/
+MRNet_Knee_Data.zip
+reports/
 *.npy
 *.npz
 
