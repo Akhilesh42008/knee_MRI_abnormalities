@@ -12,6 +12,7 @@ from sklearn.metrics import (
     precision_score, recall_score, roc_auc_score, RocCurveDisplay,
 )
 from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 
 from src.dataset import MRNetDataset, TASKS
 from src.model import MRNetClassifier
@@ -61,10 +62,12 @@ def main():
         model.eval()
         targets, probabilities = [], []
 
-        for batch in loader:
-            logits = model(batch["image"].to(device, non_blocking=True))
-            targets.extend(batch["labels"][:, task_index].numpy().tolist())
-            probabilities.extend(torch.sigmoid(logits).cpu().numpy().tolist())
+        with torch.inference_mode():
+            progress = tqdm(loader, desc=f"{task} evaluation", unit="batch", dynamic_ncols=True)
+            for batch in progress:
+                logits = model(batch["image"].to(device, non_blocking=True))
+                targets.extend(batch["labels"][:, task_index].cpu().numpy().tolist())
+                probabilities.extend(torch.sigmoid(logits).cpu().numpy().tolist())
 
         predictions = (np.asarray(probabilities) >= 0.5).astype(int)
         metrics = {
