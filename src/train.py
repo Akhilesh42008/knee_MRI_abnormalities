@@ -8,6 +8,7 @@ import torch
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from torch import nn
 from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 
 from src.dataset import MRNetDataset, TASKS
 from src.model import MRNetClassifier
@@ -21,10 +22,11 @@ def seed_everything(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-def train_epoch(model, loader, optimizer, criterion, device, task_index, scaler):
+def train_epoch(model, loader, optimizer, criterion, device, task_index, scaler, epoch, epochs, task):
     model.train()
     total_loss = 0.0
-    for batch in loader:
+    progress = tqdm(loader, desc=f"{task} train {epoch}/{epochs}", unit="batch", dynamic_ncols=True)
+    for batch in progress:
         images = batch["image"].to(device, non_blocking=True)
         labels = batch["labels"][:, task_index].to(device)
         optimizer.zero_grad(set_to_none=True)
@@ -35,20 +37,23 @@ def train_epoch(model, loader, optimizer, criterion, device, task_index, scaler)
         scaler.step(optimizer)
         scaler.update()
         total_loss += loss.item() * labels.size(0)
+        progress.set_postfix(loss=f"{loss.item():.4f}")
     return total_loss / len(loader.dataset)
 
 
 @torch.no_grad()
-def validate(model, loader, criterion, device, task_index):
+def validate(model, loader, criterion, device, task_index, task, epoch, epochs):
     model.eval()
     losses, targets, probabilities = 0.0, [], []
-    for batch in loader:
+    progress = tqdm(loader, desc=f"{task} valid {epoch}/{epochs}", unit="batch", dynamic_ncols=True)
+    for batch in progress:
         images = batch["image"].to(device, non_blocking=True)
         labels = batch["labels"][:, task_index].to(device)
         with torch.autocast(device_type=device.type, enabled=device.type == "cuda"):
             logits = model(images)
             loss = criterion(logits, labels)
         losses += loss.item() * labels.size(0)
+        progress.set_postfix(loss=f"{loss.item():.4f}")
         targets.extend(labels.cpu().numpy().tolist())
         probabilities.extend(torch.sigmoid(logits).cpu().numpy().tolist())
     predictions = (np.asarray(probabilities) >= 0.5).astype(int)
@@ -122,8 +127,8 @@ def main():
         history = []
 
         for epoch in range(1, args.epochs + 1):
-            train_loss = train_epoch(model, train_loader, optimizer, criterion, device, task_index, scaler)
-            metrics = validate(model, valid_loader, criterion, device, task_index)
+            train_loss = train_epoch(model, train_loader, optimizer, criterion, device, task_index, scaler, epoch, args.epochs, task)
+            metrics = validate(model, valid_loader, criterion, device, task_index, task, epoch, args.epochs)
             scheduler.step(metrics["loss"])
             history.append({
                 "epoch": epoch,
