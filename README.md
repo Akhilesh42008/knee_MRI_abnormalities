@@ -18,7 +18,7 @@ We are building models for three tasks:
 
 We connected to the MRNet dataset through Redivis and created scripts to collect and inspect the training and validation labels. The labels for all three tasks are combined using the examination ID.
 
-We have added the image loader, ResNet18 model, training and evaluation scripts, dataset summary, prediction script and training-history plots. The model code passed a small test using sample data. The MRI files and label tables have been downloaded. Full model training and evaluation are still pending.
+We have added the image loader, ResNet18 model, training and evaluation scripts, dataset summary, prediction script and training-history plots. The MRI files and label tables have been downloaded. The data loader and model also passed a small synthetic smoke test.
 
 ## Folder structure
 
@@ -79,13 +79,11 @@ Before training, the data summary script checks which labelled examinations have
 
 The training script builds a separate classifier for abnormality, ACL tear and meniscus tear. It uses class-weighted loss, a learning-rate scheduler, early stopping and random slice sampling. On a CUDA GPU it also enables mixed-precision training. The best checkpoints and epoch histories are saved in `models/`.
 
-When we are ready to train, run `python -m src.train --data-root data/MRNet-v1.0 --epochs 10 --batch-size 2 --pretrained`. The batch size and number of slices can be reduced if GPU memory is limited.
+For a small CPU test run, we used `python -m src.train --epochs 1 --batch-size 1 --num-slices 4 --image-size 128 --workers 0`. This completed one epoch for each of the three tasks and saved checkpoints and training histories in `models/`. It is only an initial run, not a final model. For longer training, increase the epochs gradually and choose settings that the available hardware can handle. On a CUDA GPU, the script can use mixed precision.
 
 ## Evaluation
 
-After training, run `python -m src.evaluate --data-root data/MRNet-v1.0`.
-
-The metrics, ROC curves and confusion matrices are saved in the `reports/` folder.
+After training, run `python -m src.evaluate`. The evaluator loads the saved checkpoints and runs inference on the validation split. It reports accuracy, precision, recall, F1 and ROC-AUC. The metrics, ROC curves and confusion matrices are saved in the `reports/` folder. Evaluation uses inference mode so gradients are not tracked.
 
 ## Testing the code
 
@@ -103,5 +101,5 @@ After the three model checkpoints have been trained, a prediction for one examin
 
 ## Current status
 
-The label extraction and MRI downloads are complete. The data preparation, model, training, evaluation, prediction and training-plot scripts are in place. The next stage is to train the models, review their validation results and improve them where needed.
+The label extraction and MRI downloads are complete. The data preparation, model, training, evaluation, prediction and training-plot scripts are in place. An initial CPU training run has completed one epoch for each task. Its validation results were: abnormality ROC-AUC 0.7846 (accuracy 0.7647, F1 0.8542); ACL ROC-AUC 0.6934 (accuracy 0.6050, F1 0.5766); meniscus ROC-AUC 0.6039 (accuracy 0.6050, F1 0.5347). These are preliminary results from a single epoch and should not be treated as final performance. The next step is to run the fixed evaluation script, inspect the metrics and plots, then plan further training and model improvements.
 
