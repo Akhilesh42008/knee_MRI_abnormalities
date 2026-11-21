@@ -1,6 +1,7 @@
 import argparse
 import json
 import random
+import time
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +24,7 @@ def seed_everything(seed):
 
 
 def train_epoch(model, loader, optimizer, criterion, device, task_index, scaler, epoch, epochs, task):
+    started = time.perf_counter()
     model.train()
     total_loss = 0.0
     progress = tqdm(loader, desc=f"{task} train {epoch}/{epochs}", unit="batch", dynamic_ncols=True)
@@ -38,11 +40,12 @@ def train_epoch(model, loader, optimizer, criterion, device, task_index, scaler,
         scaler.update()
         total_loss += loss.item() * labels.size(0)
         progress.set_postfix(loss=f"{loss.item():.4f}")
-    return total_loss / len(loader.dataset)
+    return total_loss / len(loader.dataset), time.perf_counter() - started
 
 
 @torch.no_grad()
 def validate(model, loader, criterion, device, task_index, task, epoch, epochs):
+    started = time.perf_counter()
     model.eval()
     losses, targets, probabilities = 0.0, [], []
     progress = tqdm(loader, desc=f"{task} valid {epoch}/{epochs}", unit="batch", dynamic_ncols=True)
@@ -66,7 +69,7 @@ def validate(model, loader, criterion, device, task_index, task, epoch, epochs):
         metrics["roc_auc"] = float(roc_auc_score(targets, probabilities))
     except ValueError:
         metrics["roc_auc"] = None
-    return metrics
+    return metrics, time.perf_counter() - started
 
 
 def main():
@@ -89,6 +92,7 @@ def main():
     if args.epochs < 1 or args.batch_size < 1 or args.num_slices < 1:
         parser.error("epochs, batch-size and num-slices must be positive integers")
 
+    overall_started = time.perf_counter()
     seed_everything(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     output_dir = Path(args.output_dir)
@@ -108,6 +112,7 @@ def main():
     print(f"Training examinations: {len(train_set)} | Validation examinations: {len(valid_set)}")
 
     for task_index, task in enumerate(TASKS):
+        task_started = time.perf_counter()
         print(f"\n{'=' * 16} {task.upper()} {'=' * 16}")
         model = MRNetClassifier(pretrained=args.pretrained).to(device)
         labels = train_set.labels[task].to_numpy()
@@ -127,13 +132,18 @@ def main():
         history = []
 
         for epoch in range(1, args.epochs + 1):
-            train_loss = train_epoch(model, train_loader, optimizer, criterion, device, task_index, scaler, epoch, args.epochs, task)
-            metrics = validate(model, valid_loader, criterion, device, task_index, task, epoch, args.epochs)
+            epoch_started = time.perf_counter()
+            train_loss, train_seconds = train_epoch(model, train_loader, optimizer, criterion, device, task_index, scaler, epoch, args.epochs, task)
+            metrics, valid_seconds = validate(model, valid_loader, criterion, device, task_index, task, epoch, args.epochs)
+            epoch_seconds = time.perf_counter() - epoch_started
             scheduler.step(metrics["loss"])
             history.append({
                 "epoch": epoch,
                 "train_loss": train_loss,
                 "learning_rate": optimizer.param_groups[0]["lr"],
+                "train_seconds": train_seconds,
+                "validation_seconds": valid_seconds,
+                "epoch_seconds": epoch_seconds,
                 **metrics,
             })
             auc = metrics["roc_auc"] if metrics["roc_auc"] is not None else -1.0
@@ -166,10 +176,14 @@ def main():
                 print(f"Early stopping {task}: validation did not improve for {args.patience} epochs.")
                 break
 
+        task_seconds = time.perf_counter() - task_started
         with open(output_dir / f"{task}_history.json", "w", encoding="utf-8") as file:
             json.dump(history, file, indent=2)
+        print(f"{task.upper()} total time: {task_seconds / 60:.1f} minutes ({task_seconds / 3600:.2f} hours)")
 
-    print(f"\nTraining finished. Best checkpoints and histories are in {output_dir}.")
+    overall_seconds = time.perf_counter() - overall_started
+    print(f"\nTotal training time: {overall_seconds / 60:.1f} minutes ({overall_seconds / 3600:.2f} hours)")
+    print(f"Best checkpoints and histories are in {output_dir}.")
 
 
 if __name__ == "__main__":
