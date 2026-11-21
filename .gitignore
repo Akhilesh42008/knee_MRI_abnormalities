@@ -12,7 +12,6 @@ __pycache__/
 data/
 kaggle_mri_data/
 MRNet_Knee_Data.zip
-reports/
 *.npy
 *.npz
 
